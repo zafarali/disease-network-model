@@ -2,8 +2,19 @@ import numpy as np
 from collections import Counter
 from BaseObjects import Individual
 
+np.random.seed(1)
+
 class Model(object):
-    def __init__(self, num_individuals, num_connections, partitioning,  friend_distribution, states=[0,1], symmetric=True):
+    def __init__(self, 
+        num_individuals, 
+        num_connections, 
+        partitioning, 
+        friend_distribution, 
+        states=[0,1], 
+        symmetric=True,
+        transmission_rate=1,
+        recovery_time=4
+        ):
         """
             Creates a Network of individuals
             @params:
@@ -24,15 +35,24 @@ class Model(object):
                         {("MALE,1","FEMALE,2"):0.5, ("MALE,1","MALE,2"):0.75,...}
                 states: the states in this model (=[0,1]) (state[0] must be the default state)
                 symmetric: if True it implies that if X is friends with Y, it automatically implies that Y is friends with X
+                transmission_rate: the probability that a contact would result in a transmission
+                recovery_time: the time taken to recover from the infected state into the recovered state.
                 # (!) contact strenghts not yet supported.
         """
         assert np.sum(partitioning.values()) == 1, 'Partitioning must add to 1. Instead added to: '+str(np.sum(partitioning.values()))
         assert len(states) >= 1, 'Must have atleast 1 state'
         assert type(num_connections) in [int, dict], 'number of connections is of unknown type.'
+
+
+        self.recovery_time = recovery_time
+        self.transmission_rate = transmission_rate
+        self.states = states
+
         # create a partitioning for easy access later.
         self.partitioning = { key: [] for key in partitioning.keys() }
         self.individuals = []
-        
+        self.infecteds = []
+
         # create our individuals
         for i in range(num_individuals):
             
@@ -106,7 +126,97 @@ class Model(object):
             j+=1 #increment
 
     def partition_summary(self, detailed=False):
+        """
+
+        """ 
         if detailed:
             raise NotImplemented("Not Implemented Yet")
         else:
             return map( lambda (k,v): (k,len(v)), self.partitioning.items())
+
+    def edge_list(self):
+        """
+            returns an array of edge-edge connections with 
+            source_id,target_id,strength,class,state
+        """
+        to_return = ['source,target,strength,class,state']
+        for i in self.individuals:
+
+            for fid,c in i.friends:
+                to_return.append(str(i.id)+','+str(fid)+','+str(c)+','+i.properties.replace(',','')+','+str(i.state))
+
+        return to_return
+
+    def export_network(self, format='JSON'):
+        if not 'JSON':
+            return self.edge_list()
+
+        nodes = []
+        links = []
+        for i in self.individuals:
+            nodes.append({
+                "name":i.id,
+                "group":i.properties
+                })
+
+            for f,v in i.friends:
+                links.append({
+                    "source":i.id,
+                    "target":f,
+                    "value":v
+                    })
+
+        return {"links":links, "nodes":nodes}
+
+    def introduce_infection(self, infected_id=False):
+        """
+            Turns an individual into an infected.
+            @params:
+                id: the ID of the individual to make infected.
+                    By default this is random.
+        """
+        infected_id = infected_id if infected_id else np.random.randint(len(self.individuals)) 
+
+        self.individuals[infected_id].state = self.states[1]
+        self.infecteds.append(infected_id)
+
+    def simulate(self, time=100, per_day_interaction_fraction=0.5):
+        """ 
+            Runs the simulation on the network
+            @params:
+                time[=100]: the amount of time that the simulation must be run
+                per_day_interaction_fraction[=0.5]: the fraction of people that will interact per day
+        """
+
+
+        N = len(self.individuals)
+        num_interactions_per_day = per_day_interaction_fraction * N
+
+        # range through all time
+        for t in xrange(time):
+            # generate a list of selected individuals
+            selected_individuals = np.random.randint(N, size=num_interactions_per_day):
+
+            # loop through all individuals
+            for i in selected_individuals:
+                individual = self.individuals[i]
+
+                # first check if you are infected.
+                # if you are infected, loop through all friends and
+                # attempt to infect them with prob self.transmission_rate
+                # if and only if they are in state[0]
+
+                # also increment individual.time_since_infected
+                # so that you can check if they recover self.recovery
+                # if recovered change their self.state to state[2]
+
+                # if not infected:
+                # loop through all friends:
+                for friend_id,strength in self.friends:
+                    # check if any of the friends are infected
+                    # attempt to become infected with prob self.transmission_rate
+                    # if infected, break the loop and change to the next individual.
+
+                #end friendloop
+            #end individualloop
+        #end dayloop
