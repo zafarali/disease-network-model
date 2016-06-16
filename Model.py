@@ -5,16 +5,56 @@ from BaseObjects import Individual
 np.random.seed(1)
 
 class Model(object):
-    def __init__(self, 
-        num_individuals, 
+    def __init__(self, transmission_rate, recovery_time, states=[0,1]):
+        """
+            Creates a model
+        """
+        self.transmission_rate = transmission_rate
+        self.recovery_time = recovery_time
+
+    @staticmethod
+    def random_network(num_individuals,
+        poisson_parameter, 
+        partitioning, 
+        states=[0,1],
+        transmission_rate=1,
+        recovery_time=4):
+        """
+            Creates a random poisson network of individuals
+            @params:
+                num_individuals: the number of individuals in the network
+                poisson_parameter: the avergage number of connections
+                states[=0,1]: the possible states of the network
+        """
+        model = Model(transmission_rate, recovery_time, states=states)
+        model.partitioning = { p:[] for p in partitioning}
+        # create all the new individuals        
+        model.individuals = map(lambda i: Individual(i, properties=np.random.choice(partitioning), state=states[0]), xrange(num_individuals))
+
+        # loop to generate add friends to individuals
+        for individual in model.individuals:
+            
+            k = np.random.poisson(poisson_parameter) # number of connections
+
+            for fid in np.random.randint(num_individuals, size=k):
+                # add the connections between the two
+                individual.add_connection(fid)
+                model.individuals[fid].add_connection(individual.id)
+            #endfor friends
+        #endfor over all individuals
+
+        return model
+
+
+    @staticmethod
+    def create_realistic_network(num_individuals, 
         num_connections, 
         partitioning, 
         friend_distribution, 
         states=[0,1], 
         symmetric=True,
         transmission_rate=1,
-        recovery_time=4
-        ):
+        recovery_time=4):
         """
             Creates a Network of individuals
             @params:
@@ -43,15 +83,12 @@ class Model(object):
         assert len(states) >= 1, 'Must have atleast 1 state'
         assert type(num_connections) in [int, dict], 'number of connections is of unknown type.'
 
-
-        self.recovery_time = recovery_time
-        self.transmission_rate = transmission_rate
-        self.states = states
+        model = Model(transmission_rate, recovery_time, states=states)
 
         # create a partitioning for easy access later.
-        self.partitioning = { key: [] for key in partitioning.keys() }
-        self.individuals = []
-        self.infecteds = []
+        model.partitioning = { key: [] for key in partitioning.keys() }
+        model.individuals = []
+        model.infecteds = []
 
         # create our individuals
         for i in range(num_individuals):
@@ -71,8 +108,8 @@ class Model(object):
             
             created_individual = Individual(i, properties=selected_key, state=states[0])
             
-            self.individuals.append(created_individual)
-            self.partitioning[selected_key].append(created_individual)
+            model.individuals.append(created_individual)
+            model.partitioning[selected_key].append(created_individual)
         
         # format the connections variable properly. 
         if type(num_connections) is int:
@@ -81,7 +118,7 @@ class Model(object):
         # calculate the total number of connections in this network
         total_num_connections = 0
         try:
-            for k,v in self.partition_summary():
+            for k,v in model.partition_summary():
                 # check if the number is actualy a number or a function.
                 total_num_connections += num_connections[k]() * v if hasattr(num_connections[k], '__call__') else num_connections[k] * v
         except KeyError as e:
@@ -94,9 +131,9 @@ class Model(object):
             if j > total_num_connections * 5:
                 raise Exception("Made too many connection attempts")
                 
-            # pick a random individual from the population
-            individual_1 = self.individuals[np.random.randint(num_individuals)]
-            individual_2 = self.individuals[np.random.randint(num_individuals)]
+            # pick two random individuals from the population
+            individual_1 = model.individuals[np.random.randint(num_individuals)]
+            individual_2 = model.individuals[np.random.randint(num_individuals)]
             if individual_1.id == individual_2.id: #make sure they are not the same
                 continue
             
@@ -120,10 +157,15 @@ class Model(object):
                 unif = np.random.random()
                 if unif < prob_of_friendship:
                     individual_1.add_connection(individual_2.id)
+                    j+=1 #increment
                     if symmetric:
                         individual_2.add_connection(individual_1.id)
-
-            j+=1 #increment
+                    #endif symmetric
+                #endif unif
+            #endif avg
+        #endwhile
+            
+        return model
 
     def partition_summary(self, detailed=False):
         """
@@ -132,7 +174,7 @@ class Model(object):
         if detailed:
             raise NotImplemented("Not Implemented Yet")
         else:
-            return map( lambda (k,v): (k,len(v)), self.partitioning.items())
+            return map( lambda k: (k[0],len(k[1])), self.partitioning.items())
 
     def edge_list(self):
         """
@@ -176,6 +218,9 @@ class Model(object):
                     By default this is random.
         """
         infected_id = infected_id if infected_id else np.random.randint(len(self.individuals)) 
+        
+        if not self.infecteds:
+            self.infecteds = []
 
         self.individuals[infected_id].state = self.states[1]
         self.infecteds.append(infected_id)
@@ -195,7 +240,7 @@ class Model(object):
         # range through all time
         for t in xrange(time):
             # generate a list of selected individuals
-            selected_individuals = np.random.randint(N, size=num_interactions_per_day):
+            selected_individuals = np.random.randint(N, size=num_interactions_per_day)
 
             # loop through all individuals
             for i in selected_individuals:
@@ -216,7 +261,7 @@ class Model(object):
                     # check if any of the friends are infected
                     # attempt to become infected with prob self.transmission_rate
                     # if infected, break the loop and change to the next individual.
-
+                    pass
                 #end friendloop
             #end individualloop
         #end dayloop
