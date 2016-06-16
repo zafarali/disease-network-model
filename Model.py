@@ -40,7 +40,7 @@ class Model(object):
                 # (!) contact strenghts not yet supported.
         """
         assert np.sum(partitioning.values()) == 1, 'Partitioning must add to 1. Instead added to: '+str(np.sum(partitioning.values()))
-        assert len(states) >= 1, 'Must have atleast 1 state'
+        assert len(states) >= 1, 'Must have at least 1 state'
         assert type(num_connections) in [int, dict], 'number of connections is of unknown type.'
 
 
@@ -48,16 +48,16 @@ class Model(object):
         self.transmission_rate = transmission_rate
         self.states = states
 
-        # create a partitioning for easy access later.
+        #create a partitioning for easy access later.
         self.partitioning = { key: [] for key in partitioning.keys() }
         self.individuals = []
         self.infecteds = []
 
-        # create our individuals
+        #create our individuals
         for i in range(num_individuals):
             
-            unif = np.random.random() # generate a uniform variable
-            # determine the partition of this individual:
+            unif = np.random.random() #generate a uniform variable
+            #determine the partition of this individual:
 
             prev_prob = 0 
             selected_key = ""
@@ -132,7 +132,7 @@ class Model(object):
         if detailed:
             raise NotImplemented("Not Implemented Yet")
         else:
-            return map( lambda (k,v): (k,len(v)), self.partitioning.items())
+            return map( lambda k,v: (k,len(v)), self.partitioning.items())
 
     def edge_list(self):
         """
@@ -189,34 +189,47 @@ class Model(object):
         """
 
 
-        N = len(self.individuals)
-        num_interactions_per_day = per_day_interaction_fraction * N
+        #N = len(self.individuals)
+        #num_interactions_per_day = per_day_interaction_fraction * N
 
         # range through all time
         for t in xrange(time):
             # generate a list of selected individuals
-            selected_individuals = np.random.randint(N, size=num_interactions_per_day):
-
+            #selected_individuals = np.random.randint(N, size=num_interactions_per_day)
+            stored_infecteds = []
             # loop through all individuals
-            for i in selected_individuals:
+            for i in self.infecteds:
                 individual = self.individuals[i]
-
-                # first check if you are infected.
+                for friendid, _ in individual.friends:
+                    if individual.state == 0:
+                        unif = np.random.random() 
+                        if unif < self.transsmission_rate:
+                            self.individuals[friendid].state = 1
+                            self.individuals[friendid].time_since_infected = 0
+                            stored_infecteds.append(friendid)
+                                    #endif
+                            #endif
+                    #endfor
+                if individual.time_since_infected < 4:
+                    individual.time_since_infected += 1
+                
+                elif individual.time_since_infected == 4:
+                    individual.state = 2
+                    self.infecteds.remove(individual.id)
+                    
+            self.infecteds = self.infecteds + stored_infecteds   
+             #endfor
+             
+                       
                 # if you are infected, loop through all friends and
                 # attempt to infect them with prob self.transmission_rate
                 # if and only if they are in state[0]
 
+                    
+                
                 # also increment individual.time_since_infected
+                
+                
                 # so that you can check if they recover self.recovery
                 # if recovered change their self.state to state[2]
-
-                # if not infected:
-                # loop through all friends:
-                for friend_id,strength in self.friends:
-                    # check if any of the friends are infected
-                    # attempt to become infected with prob self.transmission_rate
-                    # if infected, break the loop and change to the next individual.
-
-                #end friendloop
-            #end individualloop
         #end dayloop
