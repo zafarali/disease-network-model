@@ -11,6 +11,7 @@ class Model(object):
         """
         self.transmission_rate = transmission_rate
         self.recovery_time = recovery_time
+        self.states = states
 
     @staticmethod
     def random_network(num_individuals,
@@ -175,7 +176,6 @@ class Model(object):
         if detailed:
             raise NotImplemented("Not Implemented Yet")
         else:
-            return map( lambda k,v: (k,len(v)), self.partitioning.items())
             return map( lambda k: (k[0],len(k[1])), self.partitioning.items())
 
     def edge_list(self):
@@ -200,7 +200,8 @@ class Model(object):
         for i in self.individuals:
             nodes.append({
                 "name":i.id,
-                "group":i.properties
+                "group":i.properties,
+                "state":i.state
                 })
 
             for f,v in i.friends:

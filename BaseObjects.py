@@ -16,6 +16,7 @@ class Individual(object):
         self.friends = friends if len(friends) else [] # tuples containing (individual_id, contact_strength)
         self.state = state 
         self.properties = properties
+        self.time_since_infected = 0
     def add_connection(self, friend_id, contact_strength=1):
         """
             Adds a connection to this individual
