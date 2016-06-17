@@ -2,7 +2,7 @@ import numpy as np
 from collections import Counter
 
 class Individual(object):
-    def __init__(self, id, state=0, friends=[], properties=""):
+    def __init__(self, id, state=0, friends=[], properties="", time_since_infected=0):
         """
             Creates an individual in the network.
             @params:
@@ -16,7 +16,7 @@ class Individual(object):
         self.friends = friends if len(friends) else [] # tuples containing (individual_id, contact_strength)
         self.state = state 
         self.properties = properties
-        self.time_since_infected = 0
+        self.time_since_infected = time_since_infected
     def add_connection(self, friend_id, contact_strength=1):
         """
             Adds a connection to this individual
