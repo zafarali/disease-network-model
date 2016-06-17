@@ -1,6 +1,7 @@
 import numpy as np
 from collections import Counter
 from BaseObjects import Individual
+import random
 
 np.random.seed(1)
 
@@ -12,6 +13,23 @@ class Model(object):
         self.transmission_rate = transmission_rate
         self.recovery_time = recovery_time
         self.states = states
+        self.infecteds = []
+        self.individuals = []
+
+    def deep_copy(self):
+        new_model = Model(self.transmission_rate, self.recovery_time, states=self.states)
+        new_model.infecteds = list(self.infecteds)
+        new_model.individuals = []
+        for individual in self.individuals:
+            new_model.individuals.append(
+                Individual(
+                    individual.id, 
+                    individual.state, 
+                    [ (k,v) for k,v in individual.friends], 
+                    individual.properties, 
+                    individual.time_since_infected))
+        new_model.partitioning = dict(self.partitioning)
+        return new_model
 
     @staticmethod
     def random_network(num_individuals,
@@ -45,7 +63,6 @@ class Model(object):
         #endfor over all individuals
 
         return model
-
 
     @staticmethod
     def create_realistic_network(num_individuals, 
@@ -112,7 +129,7 @@ class Model(object):
             
             model.individuals.append(created_individual)
             model.partitioning[selected_key].append(created_individual)
-        
+        print('Created '+str(num_individuals)+' individuals. Now creating network')
         # format the connections variable properly. 
         if type(num_connections) is int:
             num_connections = { key: num_connections for key in partitioning.keys()}
@@ -126,13 +143,15 @@ class Model(object):
         except KeyError as e:
             raise Exception("A key wasn't specified in num_connections: "+ str(e))
             
-
+        print('Number of connections: '+str(total_num_connections)+'. Now creating...')
         # create some connections
         j = 0
         while j < total_num_connections:
+            if j % 5000 == 0:
+                print('Created '+str(j))
             if j > total_num_connections * 5:
                 raise Exception("Made too many connection attempts")
-                
+            j+=1 #increment
             # pick two random individuals from the population
             individual_1 = model.individuals[np.random.randint(num_individuals)]
             individual_2 = model.individuals[np.random.randint(num_individuals)]
@@ -159,14 +178,13 @@ class Model(object):
                 unif = np.random.random()
                 if unif < prob_of_friendship:
                     individual_1.add_connection(individual_2.id)
-                    j+=1 #increment
                     if symmetric:
                         individual_2.add_connection(individual_1.id)
                     #endif symmetric
                 #endif unif
             #endif avg
         #endwhile
-            
+        
         return model
 
     def partition_summary(self, detailed=False):
@@ -228,7 +246,7 @@ class Model(object):
         self.individuals[infected_id].state = self.states[1]
         self.infecteds.append(infected_id)
 
-    def simulate(self, time=100, per_day_interaction_fraction=0.5):
+    def simulate(self, time=100, printer=False, return_data=False, until=None):
         """ 
             Runs the simulation on the network
             @params:
@@ -241,32 +259,66 @@ class Model(object):
         #num_interactions_per_day = per_day_interaction_fraction * N
 
         # range through all time
+        to_return = [('time', 'num_infected')]
+
         for t in xrange(time):
             # generate a list of selected individuals
 
             #selected_individuals = np.random.randint(N, size=num_interactions_per_day)
             stored_infecteds = []
-
+            infecteds_count = Counter()
             # loop through all individuals
             for i in self.infecteds:
                 individual = self.individuals[i]
+                # if t == 0:
+                #     print individual.time_since_infected
+                # print('->checking individual:'+str(individual.id)+', #friends:'+str(len(individual.friends)))
                 for friendid, _ in individual.friends:
-                    if individual.state == 0:
-                        unif = np.random.random() 
-                        if unif < self.transsmission_rate:
+                    unif = np.random.random() 
+                    if self.individuals[friendid].state == 0:
+                        if unif < self.transmission_rate: # person gets infected
                             self.individuals[friendid].state = 1
                             self.individuals[friendid].time_since_infected = 0
                             stored_infecteds.append(friendid)
-                                    #endif
+                            infecteds_count.update(self.individuals[friendid].properties)
                             #endif
                     #endfor
-                if individual.time_since_infected < 4:
-                    individual.time_since_infected += 1
-                
-                elif individual.time_since_infected == 4:
+                if individual.time_since_infected > np.random.poisson(self.recovery_time)+np.random.randint(5):
                     individual.state = 2
                     self.infecteds.remove(individual.id)
-                    
+                else:
+                    individual.time_since_infected += 1
+                
             self.infecteds = self.infecteds + stored_infecteds   
-             #endfor
+
+            #endfor
+            if return_data:
+                to_return.append((t, len(self.infecteds)))
+            if printer:
+                print(str(t)+','+str(len(self.infecteds)))
+            else:
+                # print('t='+str(t)+', # infected individuals='+str(len(self.infecteds)))
+                pass
+            if until and len(self.infecteds) > until:
+                print until
+                print('Reached '+str(len(self.infecteds))+' infected individuals at t='+str(t))
+                break
         #end dayloop
+
+        if return_data:
+            return to_return
+
+
+    def delete_random_edges(self, num_edges):
+        
+        for individual in self.individuals:
+
+            k = len(individual.friends)
+            to_delete_proposed = np.random.poisson(num_edges)
+            to_delete = to_delete_proposed if to_delete_proposed < k else k
+
+            to_delete = random.sample(individual.friends, to_delete)
+            for rem in to_delete:
+                individual.friends.remove(rem)
+
+
