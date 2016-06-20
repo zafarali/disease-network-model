@@ -3,20 +3,23 @@ from collections import Counter
 from BaseObjects import Individual
 import random
 
-np.random.seed(1)
+# np.random.seed(1)
 
 class Model(object):
     def __init__(self, transmission_rate, recovery_time, states=[0,1]):
         """
             Creates a model
         """
+        np.random.seed(1)
         self.transmission_rate = transmission_rate
         self.recovery_time = recovery_time
         self.states = states
         self.infecteds = []
         self.individuals = []
+        self.total_time = 0
 
     def deep_copy(self):
+
         new_model = Model(self.transmission_rate, self.recovery_time, states=self.states)
         new_model.infecteds = list(self.infecteds)
         new_model.individuals = []
@@ -29,6 +32,7 @@ class Model(object):
                     individual.properties, 
                     individual.time_since_infected))
         new_model.partitioning = dict(self.partitioning)
+        new_model.total_time = self.total_time
         return new_model
 
     @staticmethod
@@ -148,7 +152,7 @@ class Model(object):
         j = 0
         while j < total_num_connections:
             if j % 5000 == 0:
-                print('Created '+str(j))
+                print('Created '+str(j)+' connections')
             if j > total_num_connections * 5:
                 raise Exception("Made too many connection attempts")
             j+=1 #increment
@@ -231,7 +235,7 @@ class Model(object):
 
         return {"links":links, "nodes":nodes}
 
-    def introduce_infection(self, infected_id=False):
+    def introduce_infection(self, infected_id=False, infected_state=None):
         """
             Turns an individual into an infected.
             @params:
@@ -243,7 +247,7 @@ class Model(object):
         if not self.infecteds:
             self.infecteds = []
 
-        self.individuals[infected_id].state = self.states[1]
+        self.individuals[infected_id].state = infected_state if infected_state else self.states[1]
         self.infecteds.append(infected_id)
 
     def simulate(self, time=100, printer=False, return_data=False, until=None):
@@ -260,6 +264,7 @@ class Model(object):
 
         # range through all time
         to_return = [('time', 'num_infected')]
+        backlog = []
 
         for t in xrange(time):
             # generate a list of selected individuals
@@ -268,7 +273,9 @@ class Model(object):
             stored_infecteds = []
             infecteds_count = Counter()
             # loop through all individuals
+            # print self.infecteds
             for i in self.infecteds:
+                
                 individual = self.individuals[i]
                 # if t == 0:
                 #     print individual.time_since_infected
@@ -277,6 +284,7 @@ class Model(object):
                     unif = np.random.random() 
                     if self.individuals[friendid].state == 0:
                         if unif < self.transmission_rate: # person gets infected
+                            # print 'friend added=',friendid
                             self.individuals[friendid].state = 1
                             self.individuals[friendid].time_since_infected = 0
                             stored_infecteds.append(friendid)
@@ -289,8 +297,16 @@ class Model(object):
                 else:
                     individual.time_since_infected += 1
                 
-            self.infecteds = self.infecteds + stored_infecteds   
-
+            # print 't=',self.total_time
+            self.total_time += 1
+            if self.total_time % 6 == 0 or self.total_time % 5 == 0:
+                backlog.extend(stored_infecteds)
+            else:
+                if len(backlog) > 0:
+                    # print 'extended:',backlog
+                    self.infecteds.extend(backlog)
+                    backlog = []
+                self.infecteds.extend(stored_infecteds)
             #endfor
             if return_data:
                 to_return.append((t, len(self.infecteds)))
@@ -311,6 +327,7 @@ class Model(object):
 
     def delete_random_edges(self, num_edges):
         
+        deleted_edges = 0
         for individual in self.individuals:
 
             k = len(individual.friends)
@@ -319,6 +336,26 @@ class Model(object):
 
             to_delete = random.sample(individual.friends, to_delete)
             for rem in to_delete:
+                deleted_edges+=1
+                self.individuals[rem[0]].friends.remove((individual.id,1))
                 individual.friends.remove(rem)
 
+        print('Deleted: '+str(deleted_edges)+' edges')
+    def delete_preferential_edges(self, num_edges):
+        """
+            Deletes a random num of edges for non-self classes.
+        """
+        deleted_edges = 0
+        for individual in self.individuals:
+            k = len(individual.friends)
 
+            to_delete = np.random.poisson(num_edges)
+            to_delete = to_delete if to_delete < k else k
+            to_delete = random.sample(individual.friends, to_delete)
+            for rem in to_delete:
+                if self.individuals[rem[0]].properties != individual.properties:
+                    deleted_edges+=1
+                    # only delete if we do not share properties.
+                    self.individuals[rem[0]].friends.remove((individual.id,1))
+                    individual.friends.remove(rem)
+        print('Deleted: '+str(deleted_edges)+' edges')
